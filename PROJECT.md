@@ -71,12 +71,6 @@ of the activity."
   - No need for costly teacher data generation
   - Well-established benchmark
 
-### Secondary Dataset (Optional): Alpaca
-
-- **Source**: OpenAssistant Alpaca-style instruction-following dataset
-- **Purpose**: Multi-task learning and generalization studies
-- **Integration**: Used in ablation studies and cross-domain evaluation
-
 ### Teacher-Level Supervision
 
 Rather than using explicit teacher models, the project treats the datasets themselves as **teacher-authored supervision**. The explanations in e-SNLI and similar datasets reflect the reasoning patterns we want to distill into the student model.
