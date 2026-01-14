@@ -61,9 +61,9 @@ class TeacherDataLoader:
         logger.info("Loading e-SNLI dataset...")
 
         dataset = load_dataset(
-            "esnli/esnli",
-            "plain_text",
+            "stanfordnlp/esnli", 
             cache_dir=self.config.cache_dir,
+            trust_remote_code=False 
         )
 
         if split:
