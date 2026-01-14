@@ -60,7 +60,7 @@ class StudentModel(nn.Module):
         # Load model and tokenizer
         self.model = T5ForConditionalGeneration.from_pretrained(
             self.config.model_name,
-            torch_dtype=torch.float32
+            dtype=torch.float32
         )
         
         self.tokenizer = AutoTokenizer.from_pretrained(
