@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 import pandas as pd
-from datasets import load_dataset, Dataset, DatasetDict
+from datasets import load_dataset, Dataset, DatasetDict, concatenate_datasets
 from tqdm import tqdm
 
 logging.basicConfig(level=logging.INFO)
@@ -52,76 +52,68 @@ class TeacherDataLoader:
        
     def load_esnli(self, split: Optional[str] = None) -> DatasetDict:
         """
-        Load e-SNLI dataset with explanations from GitHub repository.
+        Load e-SNLI dataset from GitHub repository.
         
         Source: https://github.com/OanaMariaCamburu/e-SNLI
         
-        Format:
-            - premise: string
-            - hypothesis: string
-            - label: string ('entailment', 'neutral', 'contradiction')
+        Returns normalized format:
+            - premise: string (from Sentence1)
+            - hypothesis: string (from Sentence2)  
+            - label: int (0=entailment, 1=neutral, 2=contradiction)
             - explanation_1, explanation_2, explanation_3: string
         
         Args:
             split: Specific split to load ('train', 'validation', 'test') or None for all
         
         Returns:
-            DatasetDict containing the requested splits
+            DatasetDict with normalized columns
         """
         logger.info("Loading e-SNLI dataset from GitHub (OanaMariaCamburu/e-SNLI)...")
         
-        # URL dei file raw da GitHub
         github_base = "https://raw.githubusercontent.com/OanaMariaCamburu/e-SNLI/master/dataset"
         
-        data_files = {
-            "train": [
-                f"{github_base}/esnli_train_1.csv",
-                f"{github_base}/esnli_train_2.csv"
-            ],
-            "validation": f"{github_base}/esnli_dev.csv",
-            "test": f"{github_base}/esnli_test.csv"
-        }
+        def normalize_esnli(ds):
+            """Normalize column names and convert labels"""
+            def process(example):
+                label_map = {'entailment': 0, 'neutral': 1, 'contradiction': 2}
+                label_str = str(example.get('gold_label', 'neutral')).strip().lower()
+                
+                return {
+                    'premise': str(example.get('Sentence1', '')).strip(),
+                    'hypothesis': str(example.get('Sentence2', '')).strip(),
+                    'label': label_map.get(label_str, 1),
+                    'explanation_1': str(example.get('Explanation_1', '')).strip(),
+                    'explanation_2': str(example.get('Explanation_2', '')).strip(),
+                    'explanation_3': str(example.get('Explanation_3', '')).strip()
+                }
+            
+            return ds.map(process, remove_columns=ds.column_names)
         
         try:
-            # Carica i CSV direttamente dagli URL
-            dataset = load_dataset(
-                "csv",
-                data_files=data_files,
-                cache_dir=self.config.cache_dir
-            )
-            logger.info("✓ Successfully loaded e-SNLI from GitHub")
+            # Train: 2 files da concatenare
+            train1 = load_dataset("csv", data_files=f"{github_base}/esnli_train_1.csv", cache_dir=self.config.cache_dir)['train']
+            train2 = load_dataset("csv", data_files=f"{github_base}/esnli_train_2.csv", cache_dir=self.config.cache_dir)['train']
+            train = concatenate_datasets([normalize_esnli(train1), normalize_esnli(train2)])
             
-            # Il training set è concatenato automaticamente dai due file
+            # Validation
+            val = load_dataset("csv", data_files=f"{github_base}/esnli_dev.csv", cache_dir=self.config.cache_dir)['train']
+            validation = normalize_esnli(val)
+            
+            # Test
+            tst = load_dataset("csv", data_files=f"{github_base}/esnli_test.csv", cache_dir=self.config.cache_dir)['train']
+            test = normalize_esnli(tst)
+            
+            dataset = DatasetDict({
+                'train': train,
+                'validation': validation,
+                'test': test
+            })
+            
+            logger.info(f"✓ Loaded e-SNLI: train={len(train)}, val={len(validation)}, test={len(test)}")
             
         except Exception as e:
-            logger.error(f"Error loading from GitHub: {e}")
-            raise RuntimeError(
-                "Could not load e-SNLI dataset from GitHub. "
-                "Make sure you have internet connection and the URLs are accessible. "
-                "Download from: https://github.com/OanaMariaCamburu/e-SNLI"
-            ) from e
-        
-        # Validate expected columns
-        expected_cols = {'premise', 'hypothesis', 'label', 'explanation_1', 'explanation_2', 'explanation_3'}
-        first_split = next(iter(dataset.keys()))
-        available_cols = set(dataset[first_split].column_names)
-        
-        if not expected_cols.issubset(available_cols):
-            logger.warning(f"Expected columns {expected_cols}, got {available_cols}")
-            logger.info(f"Available columns: {available_cols}")
-        
-        # Converti label da string a int se necessario
-        # In GitHub version, labels might be: 'entailment', 'neutral', 'contradiction'
-        label_map = {'entailment': 0, 'neutral': 1, 'contradiction': 2}
-        
-        def convert_labels(example):
-            if isinstance(example['label'], str):
-                example['label'] = label_map.get(example['label'].lower(), 0)
-            return example
-        
-        # Applica conversione a tutti gli split
-        for split_name in dataset.keys():
-            dataset[split_name] = dataset[split_name].map(convert_labels)
+            logger.error(f"Error loading e-SNLI: {e}")
+            raise RuntimeError(f"Failed to load e-SNLI from GitHub: {e}") from e
         
         if split:
             if split not in dataset:
@@ -130,7 +122,6 @@ class TeacherDataLoader:
         
         logger.info(f"e-SNLI loaded successfully. Splits: {list(dataset.keys())}")
         logger.info(f"Sample counts: {[(k, len(v)) for k, v in dataset.items()]}")
-        logger.info(f"Columns: {dataset[first_split].column_names}")
         
         return dataset
         
