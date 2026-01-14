@@ -61,11 +61,23 @@ class TeacherDataLoader:
         logger.info("Loading e-SNLI dataset...")
         
         try:
-            dataset = load_dataset(
-                "esnli",
-                cache_dir=self.config.cache_dir,
-                trust_remote_code=True
-            )
+            # Try loading with script support (for older datasets versions)
+            try:
+                dataset = load_dataset(
+                    "esnli",
+                    cache_dir=self.config.cache_dir,
+                    trust_remote_code=True
+                )
+            except Exception as e:
+                # If that fails, try without trust_remote_code
+                if "no longer supported" in str(e).lower() or "script" in str(e).lower():
+                    logger.warning(f"Dataset script loading failed: {e}. Trying alternative method...")
+                    dataset = load_dataset(
+                        "esnli",
+                        cache_dir=self.config.cache_dir
+                    )
+                else:
+                    raise
             
             if split:
                 dataset = {split: dataset[split]}
