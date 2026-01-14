@@ -68,9 +68,32 @@ class TaskFormatter:
             target = None
             
         return source, target
-    
+
     @staticmethod
-    
+    def format_instruction(instruction: str,
+                            input_text: Optional[str] = None,
+                            output: Optional[str] = None) -> Tuple[str, Optional[str]]:
+        """Format instruction-following tasks.
+
+        Args:
+            instruction: Instruction text for the model to follow
+            input_text: Optional input context for the instruction
+            output: Optional expected output (None during inference)
+
+        Returns:
+            Tuple of (formatted_input, formatted_target)
+        """
+        instruction = instruction.strip()
+        input_text = input_text.strip() if input_text else ""
+
+        if input_text:
+            source = f"instruction: {instruction} input: {input_text}"
+        else:
+            source = f"instruction: {instruction}"
+
+        target = output.strip() if output and output.strip() else None
+        return source, target
+
     @staticmethod
     def format_multitask(task_type: str, **kwargs) -> Tuple[str, Optional[str]]:
         """
@@ -85,6 +108,8 @@ class TaskFormatter:
         """
         if task_type == 'nli':
             return TaskFormatter.format_nli(**kwargs)
+        if task_type in {'instruction', 'instruction_following'}:
+            return TaskFormatter.format_instruction(**kwargs)
         else:
             raise ValueError(f"Unknown task type: {task_type}")
 
