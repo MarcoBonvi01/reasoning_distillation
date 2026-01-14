@@ -3,7 +3,6 @@ Data Loader Module for Reasoning Distillation Project
 
 Handles downloading, parsing, and validation of datasets:
 - e-SNLI (Natural Language Inference with explanations)
-- Alpaca/Self-Instruct style datasets
 """
 
 import os
@@ -34,7 +33,7 @@ class DatasetConfig:
 class TeacherDataLoader:
     """
     Main class for loading and managing teacher datasets.
-    Supports e-SNLI and Alpaca-style instruction datasets.
+    Supports e-SNLI instruction datasets.
     """
     
     def __init__(self, config: Optional[DatasetConfig] = None):
@@ -204,7 +203,7 @@ class TeacherDataLoader:
         
         Args:
             dataset: Dataset to save
-            name: Dataset name (e.g., 'esnli', 'alpaca')
+            name: Dataset name (e.g., 'esnli')
             split: Split name (e.g., 'train', 'val', 'test')
         """
         save_path = Path(self.config.processed_data_dir) / name

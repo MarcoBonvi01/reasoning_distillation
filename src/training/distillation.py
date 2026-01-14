@@ -203,7 +203,7 @@ class SequenceLevelDistillation:
     Sequence-level distillation using dataset as teacher.
     
     This is the recommended approach for this project since:
-    - e-SNLI and Alpaca already contain teacher-quality explanations
+    - e-SNLI already contains teacher-quality explanations
     - No need to run teacher model during training (efficient)
     - Focus on mimicking reasoning patterns, not exact distributions
     """
@@ -288,7 +288,7 @@ class MultiTaskDistillation:
     """
     Handles distillation from multiple tasks simultaneously.
     
-    Useful when combining e-SNLI and Alpaca datasets.
+    Useful when combining multiple datasets/tasks.
     """
     
     def __init__(self,
@@ -443,7 +443,7 @@ def compare_distillation_strategies():
     print("\n3. Multi-Task Distillation")
     print("   ✓ Handles multiple datasets/tasks")
     print("   ✓ Task-specific loss weighting")
-    print("   ✓ Good for combined e-SNLI + Alpaca")
+    print("   ✓ Good for combining multiple NLI datasets")
     print("   ✗ Requires careful weight tuning")
     
     print("\n4. Curriculum Distillation")

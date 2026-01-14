@@ -10,9 +10,9 @@ This directory contains Jupyter notebooks for testing, training, evaluation, and
 
 1. **01_data_exploration.ipynb**
 
-   - Explore e-SNLI and Alpaca datasets
-   - Analyze data distribution and quality
-   - Visualize explanation patterns
+- Explore e-SNLI dataset
+- Analyze data distribution and quality
+- Visualize explanation patterns
 
 2. **02_preprocessing_and_datasets.ipynb**
 

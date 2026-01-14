@@ -70,30 +70,6 @@ class TaskFormatter:
         return source, target
     
     @staticmethod
-    def format_instruction(instruction: str,
-                          input_text: str = "",
-                          output: Optional[str] = None) -> Tuple[str, Optional[str]]:
-        """
-        Format instruction-following task (Alpaca style).
-        
-        Args:
-            instruction: The instruction/task description
-            input_text: Optional input context
-            output: The expected output/response
-            
-        Returns:
-            Tuple of (formatted_input, formatted_target)
-        """
-        # Format input
-        if input_text and input_text.strip():
-            source = f"instruction: {instruction} input: {input_text}"
-        else:
-            source = f"instruction: {instruction}"
-        
-        # Target is the output
-        target = output if output else None
-        
-        return source, target
     
     @staticmethod
     def format_multitask(task_type: str, **kwargs) -> Tuple[str, Optional[str]]:
@@ -109,8 +85,6 @@ class TaskFormatter:
         """
         if task_type == 'nli':
             return TaskFormatter.format_nli(**kwargs)
-        elif task_type == 'instruction_following':
-            return TaskFormatter.format_instruction(**kwargs)
         else:
             raise ValueError(f"Unknown task type: {task_type}")
 
@@ -154,25 +128,6 @@ class ReasoningPreprocessor:
         # Tokenize
         return self._tokenize_pair(source, target)
     
-    def preprocess_alpaca_sample(self, sample: Dict) -> Dict[str, torch.Tensor]:
-        """
-        Preprocess a single Alpaca sample.
-        
-        Args:
-            sample: Raw Alpaca sample
-            
-        Returns:
-            Dictionary with tokenized inputs and labels
-        """
-        # Format the sample
-        source, target = self.formatter.format_instruction(
-            instruction=sample['instruction'],
-            input_text=sample.get('input', ''),
-            output=sample.get('output', '')
-        )
-        
-        # Tokenize
-        return self._tokenize_pair(source, target)
     
     def _tokenize_pair(self, source: str, target: Optional[str]) -> Dict[str, torch.Tensor]:
         """
@@ -242,30 +197,6 @@ class ReasoningPreprocessor:
         
         return self._tokenize_batch(sources, targets)
     
-    def preprocess_batch_alpaca(self, samples: List[Dict]) -> Dict[str, torch.Tensor]:
-        """
-        Preprocess a batch of Alpaca samples.
-        
-        Args:
-            samples: List of raw Alpaca samples
-            
-        Returns:
-            Batched dictionary with tokenized inputs
-        """
-        # Format all samples
-        sources = []
-        targets = []
-        
-        for sample in samples:
-            source, target = self.formatter.format_instruction(
-                instruction=sample['instruction'],
-                input_text=sample.get('input', ''),
-                output=sample.get('output', '')
-            )
-            sources.append(source)
-            targets.append(target)
-        
-        return self._tokenize_batch(sources, targets)
     
     def _tokenize_batch(self, 
                        sources: List[str], 
@@ -413,7 +344,5 @@ def quick_preprocess_sample(sample: Dict,
     
     if task_type == "nli":
         return preprocessor.preprocess_esnli_sample(sample)
-    elif task_type == "instruction_following":
-        return preprocessor.preprocess_alpaca_sample(sample)
     else:
         raise ValueError(f"Unknown task type: {task_type}")

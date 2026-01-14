@@ -387,7 +387,7 @@ def compare_teacher_modes():
     print("=" * 70)
     
     print("\n1. Dataset-as-Teacher (RECOMMENDED)")
-    print("   ✓ Uses pre-generated explanations from e-SNLI/Alpaca")
+    print("   ✓ Uses pre-generated explanations from e-SNLI")
     print("   ✓ No additional compute cost")
     print("   ✓ High-quality human or LLM-generated explanations")
     print("   ✓ Reproducible and fast")
@@ -410,7 +410,6 @@ def compare_teacher_modes():
     print("\nFor this project: Use Dataset-as-Teacher (mode 1)")
     print("Reasons:")
     print("  • e-SNLI has high-quality human explanations")
-    print("  • Alpaca already contains LLM-generated responses")
     print("  • Much faster and more reproducible")
     print("  • Sufficient for demonstrating distillation")
     print("=" * 70)

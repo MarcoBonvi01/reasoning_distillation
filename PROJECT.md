@@ -260,7 +260,6 @@ reasoning-distillation/
 ├── data/                              # Data directory
 │   ├── raw/                          # Raw downloaded data
 │   │   ├── e-snli/                  # e-SNLI dataset
-│   │   └── alpaca/                  # Alpaca dataset
 │   └── processed/                    # Preprocessed data
 │       ├── train/                   # Training splits
 │       ├── val/                     # Validation splits
@@ -327,7 +326,7 @@ reasoning-distillation/
 
 **Content**:
 
-- Load e-SNLI and Alpaca datasets
+- Load e-SNLI dataset
 - Analyze dataset statistics (size, label distribution, explanation length)
 - Visualize reasoning patterns
 - Identify potential issues or biases
