@@ -52,15 +52,14 @@ class TeacherDataLoader:
        
     def load_esnli(self, split: Optional[str] = None) -> DatasetDict:
         """
-        Load e-SNLI dataset with explanations from raw CSV files.
+        Load e-SNLI dataset with explanations from GitHub repository.
         
-        Note: The official esnli dataset uses a loading script which is no longer supported.
-        We load directly from the raw CSV files on HuggingFace Hub.
+        Source: https://github.com/OanaMariaCamburu/e-SNLI
         
         Format:
             - premise: string
             - hypothesis: string
-            - label: int (0=entailment, 1=neutral, 2=contradiction)
+            - label: string ('entailment', 'neutral', 'contradiction')
             - explanation_1, explanation_2, explanation_3: string
         
         Args:
@@ -69,15 +68,18 @@ class TeacherDataLoader:
         Returns:
             DatasetDict containing the requested splits
         """
-        logger.info("Loading e-SNLI dataset from raw CSV files...")
+        logger.info("Loading e-SNLI dataset from GitHub (OanaMariaCamburu/e-SNLI)...")
         
-        # URL base per i file raw del dataset esnli
-        base_url = "https://huggingface.co/datasets/esnli/esnli/raw/main/data"
+        # URL dei file raw da GitHub
+        github_base = "https://raw.githubusercontent.com/OanaMariaCamburu/e-SNLI/master/dataset"
         
         data_files = {
-            "train": f"{base_url}/train.csv",
-            "validation": f"{base_url}/val.csv",
-            "test": f"{base_url}/test.csv"
+            "train": [
+                f"{github_base}/esnli_train_1.csv",
+                f"{github_base}/esnli_train_2.csv"
+            ],
+            "validation": f"{github_base}/esnli_dev.csv",
+            "test": f"{github_base}/esnli_test.csv"
         }
         
         try:
@@ -85,34 +87,19 @@ class TeacherDataLoader:
             dataset = load_dataset(
                 "csv",
                 data_files=data_files,
-                cache_dir=self.config.cache_dir,
-                delimiter="\t"  # e-SNLI usa tab-separated values
+                cache_dir=self.config.cache_dir
             )
-            logger.info("✓ Successfully loaded e-SNLI from raw CSV files")
+            logger.info("✓ Successfully loaded e-SNLI from GitHub")
+            
+            # Il training set è concatenato automaticamente dai due file
             
         except Exception as e:
-            logger.error(f"Error loading from URLs: {e}")
-            logger.info("Trying alternative: loading from hub with manual mapping...")
-            
-            try:
-                # Fallback: provare a caricare usando csv direttamente
-                dataset = load_dataset(
-                    "csv",
-                    data_files={
-                        "train": f"{base_url}/train.csv",
-                        "validation": f"{base_url}/val.csv",
-                        "test": f"{base_url}/test.csv"
-                    },
-                    cache_dir=self.config.cache_dir
-                )
-                logger.info("✓ Loaded successfully with fallback method")
-            except Exception as e2:
-                logger.error(f"All loading methods failed: {e2}")
-                raise RuntimeError(
-                    "Could not load e-SNLI dataset. The official dataset uses a Python loading script "
-                    "which is no longer supported. Please download the CSV files manually from: "
-                    f"{base_url}"
-                ) from e2
+            logger.error(f"Error loading from GitHub: {e}")
+            raise RuntimeError(
+                "Could not load e-SNLI dataset from GitHub. "
+                "Make sure you have internet connection and the URLs are accessible. "
+                "Download from: https://github.com/OanaMariaCamburu/e-SNLI"
+            ) from e
         
         # Validate expected columns
         expected_cols = {'premise', 'hypothesis', 'label', 'explanation_1', 'explanation_2', 'explanation_3'}
@@ -122,6 +109,19 @@ class TeacherDataLoader:
         if not expected_cols.issubset(available_cols):
             logger.warning(f"Expected columns {expected_cols}, got {available_cols}")
             logger.info(f"Available columns: {available_cols}")
+        
+        # Converti label da string a int se necessario
+        # In GitHub version, labels might be: 'entailment', 'neutral', 'contradiction'
+        label_map = {'entailment': 0, 'neutral': 1, 'contradiction': 2}
+        
+        def convert_labels(example):
+            if isinstance(example['label'], str):
+                example['label'] = label_map.get(example['label'].lower(), 0)
+            return example
+        
+        # Applica conversione a tutti gli split
+        for split_name in dataset.keys():
+            dataset[split_name] = dataset[split_name].map(convert_labels)
         
         if split:
             if split not in dataset:
@@ -133,9 +133,7 @@ class TeacherDataLoader:
         logger.info(f"Columns: {dataset[first_split].column_names}")
         
         return dataset
-    
-    
-    
+        
     def parse_esnli_sample(self, sample: Dict) -> Dict:
         """
         Parse a single e-SNLI sample into standard format.
