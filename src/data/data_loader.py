@@ -52,7 +52,16 @@ class TeacherDataLoader:
        
     def load_esnli(self, split: Optional[str] = None) -> DatasetDict:
         """
-        Load e-SNLI dataset with explanations.
+        Load e-SNLI dataset with explanations from raw CSV files.
+        
+        Note: The official esnli dataset uses a loading script which is no longer supported.
+        We load directly from the raw CSV files on HuggingFace Hub.
+        
+        Format:
+            - premise: string
+            - hypothesis: string
+            - label: int (0=entailment, 1=neutral, 2=contradiction)
+            - explanation_1, explanation_2, explanation_3: string
         
         Args:
             split: Specific split to load ('train', 'validation', 'test') or None for all
@@ -60,13 +69,59 @@ class TeacherDataLoader:
         Returns:
             DatasetDict containing the requested splits
         """
-        logger.info("Loading e-SNLI dataset...")
+        logger.info("Loading e-SNLI dataset from raw CSV files...")
         
-        # Usa la versione Parquet moderna
-        dataset = load_dataset(
-            "presencesw/esnli",
-            cache_dir=self.config.cache_dir
-        )
+        # URL base per i file raw del dataset esnli
+        base_url = "https://huggingface.co/datasets/esnli/esnli/raw/main/data"
+        
+        data_files = {
+            "train": f"{base_url}/train.csv",
+            "validation": f"{base_url}/val.csv",
+            "test": f"{base_url}/test.csv"
+        }
+        
+        try:
+            # Carica i CSV direttamente dagli URL
+            dataset = load_dataset(
+                "csv",
+                data_files=data_files,
+                cache_dir=self.config.cache_dir,
+                delimiter="\t"  # e-SNLI usa tab-separated values
+            )
+            logger.info("✓ Successfully loaded e-SNLI from raw CSV files")
+            
+        except Exception as e:
+            logger.error(f"Error loading from URLs: {e}")
+            logger.info("Trying alternative: loading from hub with manual mapping...")
+            
+            try:
+                # Fallback: provare a caricare usando csv direttamente
+                dataset = load_dataset(
+                    "csv",
+                    data_files={
+                        "train": f"{base_url}/train.csv",
+                        "validation": f"{base_url}/val.csv",
+                        "test": f"{base_url}/test.csv"
+                    },
+                    cache_dir=self.config.cache_dir
+                )
+                logger.info("✓ Loaded successfully with fallback method")
+            except Exception as e2:
+                logger.error(f"All loading methods failed: {e2}")
+                raise RuntimeError(
+                    "Could not load e-SNLI dataset. The official dataset uses a Python loading script "
+                    "which is no longer supported. Please download the CSV files manually from: "
+                    f"{base_url}"
+                ) from e2
+        
+        # Validate expected columns
+        expected_cols = {'premise', 'hypothesis', 'label', 'explanation_1', 'explanation_2', 'explanation_3'}
+        first_split = next(iter(dataset.keys()))
+        available_cols = set(dataset[first_split].column_names)
+        
+        if not expected_cols.issubset(available_cols):
+            logger.warning(f"Expected columns {expected_cols}, got {available_cols}")
+            logger.info(f"Available columns: {available_cols}")
         
         if split:
             if split not in dataset:
@@ -75,6 +130,7 @@ class TeacherDataLoader:
         
         logger.info(f"e-SNLI loaded successfully. Splits: {list(dataset.keys())}")
         logger.info(f"Sample counts: {[(k, len(v)) for k, v in dataset.items()]}")
+        logger.info(f"Columns: {dataset[first_split].column_names}")
         
         return dataset
     
@@ -103,23 +159,6 @@ class TeacherDataLoader:
             'explanation': valid_explanations[0] if valid_explanations else '',
             'all_explanations': valid_explanations,
             'task_type': 'nli'
-        }
-    
-    def parse_alpaca_sample(self, sample: Dict) -> Dict:
-        """
-        Parse a single Alpaca sample into standard format.
-        
-        Args:
-            sample: Raw Alpaca sample
-            
-        Returns:
-            Parsed sample with keys: instruction, input, output
-        """
-        return {
-            'instruction': sample.get('instruction', ''),
-            'input': sample.get('input', ''),
-            'output': sample.get('output', ''),
-            'task_type': 'instruction_following'
         }
     
     def validate_esnli(self, dataset: DatasetDict) -> Dict[str, any]:
@@ -163,45 +202,6 @@ class TeacherDataLoader:
                 'max_length': max(exp_lengths) if exp_lengths else 0,
                 'samples_with_explanation': len(exp_lengths)
             }
-        
-        logger.info("Validation complete.")
-        return stats
-    
-    def validate_alpaca(self, dataset: Dataset) -> Dict[str, any]:
-        """
-        Validate Alpaca dataset and compute statistics.
-        
-        Args:
-            dataset: Alpaca Dataset
-            
-        Returns:
-            Dictionary with validation statistics
-        """
-        logger.info("Validating Alpaca dataset...")
-        
-        parsed = [self.parse_alpaca_sample(sample) for sample in tqdm(
-            dataset, desc="Parsing Alpaca"
-        )]
-        
-        # Compute statistics
-        instruction_lengths = [len(s['instruction'].split()) for s in parsed]
-        output_lengths = [len(s['output'].split()) for s in parsed]
-        samples_with_input = sum(1 for s in parsed if s['input'].strip())
-        
-        stats = {
-            'total_samples': len(parsed),
-            'samples_with_input': samples_with_input,
-            'instruction_length': {
-                'mean': sum(instruction_lengths) / len(instruction_lengths),
-                'min': min(instruction_lengths),
-                'max': max(instruction_lengths)
-            },
-            'output_length': {
-                'mean': sum(output_lengths) / len(output_lengths),
-                'min': min(output_lengths),
-                'max': max(output_lengths)
-            }
-        }
         
         logger.info("Validation complete.")
         return stats
@@ -272,8 +272,6 @@ def quick_load_esnli(max_samples: Optional[int] = None) -> Tuple[DatasetDict, Di
     stats = loader.validate_esnli(dataset)
     return dataset, stats
 
-
-def quick_load_alpaca(max_samples: Optional[int] = 1000) -> Tuple[Dataset, Dict]:
     """
     Quick helper to load and validate Alpaca.
     
