@@ -47,7 +47,9 @@ class TeacherDataLoader:
                         self.config.processed_data_dir,
                         self.config.cache_dir]:
             Path(dir_path).mkdir(parents=True, exist_ok=True)
-            
+
+    
+       
     def load_esnli(self, split: Optional[str] = None) -> DatasetDict:
         """
         Load e-SNLI dataset with explanations.
@@ -60,70 +62,23 @@ class TeacherDataLoader:
         """
         logger.info("Loading e-SNLI dataset...")
         
-        # File CSV ufficiali dal repository e-SNLI
-        data_files = {
-            'train': [
-                'https://raw.githubusercontent.com/OanaMariaCamburu/e-SNLI/master/dataset/esnli_train_1.csv',
-                'https://raw.githubusercontent.com/OanaMariaCamburu/e-SNLI/master/dataset/esnli_train_2.csv'
-            ],
-            'validation': 'https://raw.githubusercontent.com/OanaMariaCamburu/e-SNLI/master/dataset/esnli_dev.csv',
-            'test': 'https://raw.githubusercontent.com/OanaMariaCamburu/e-SNLI/master/dataset/esnli_test.csv'
-        }
-        
-        if split:
-            if split not in data_files:
-                raise ValueError(f"Split '{split}' not found. Available: {list(data_files.keys())}")
-            data_files = {split: data_files[split]}
-        
+        # Usa la versione Parquet moderna
         dataset = load_dataset(
-            'csv',
-            data_files=data_files,
+            "presencesw/esnli",
             cache_dir=self.config.cache_dir
         )
+        
+        if split:
+            if split not in dataset:
+                raise ValueError(f"Split '{split}' not found. Available: {list(dataset.keys())}")
+            dataset = DatasetDict({split: dataset[split]})
         
         logger.info(f"e-SNLI loaded successfully. Splits: {list(dataset.keys())}")
         logger.info(f"Sample counts: {[(k, len(v)) for k, v in dataset.items()]}")
         
         return dataset
-
-        
     
-    def load_alpaca(self, 
-                   dataset_name: str = "tatsu-lab/alpaca",
-                   max_samples: Optional[int] = None) -> Dataset:
-        """
-        Load Alpaca-style instruction dataset.
-        
-        Args:
-            dataset_name: HuggingFace dataset identifier
-            max_samples: Maximum number of samples to load (for testing)
-            
-        Returns:
-            Dataset object
-        """
-        logger.info(f"Loading Alpaca dataset: {dataset_name}...")
-        
-        try:
-            dataset = load_dataset(
-                dataset_name,
-                cache_dir=self.config.cache_dir,
-                split="train"
-            )
-            
-            if max_samples:
-                dataset = dataset.select(range(min(max_samples, len(dataset))))
-            
-            # Save raw data
-            save_path = Path(self.config.raw_data_dir) / "alpaca"
-            save_path.mkdir(exist_ok=True)
-            
-            logger.info(f"Alpaca loaded successfully. Samples: {len(dataset)}")
-            
-            return dataset
-            
-        except Exception as e:
-            logger.error(f"Error loading Alpaca: {e}")
-            raise
+    
     
     def parse_esnli_sample(self, sample: Dict) -> Dict:
         """
