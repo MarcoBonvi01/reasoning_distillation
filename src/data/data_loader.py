@@ -54,26 +54,36 @@ class TeacherDataLoader:
         
         Args:
             split: Specific split to load ('train', 'validation', 'test') or None for all
-            
+        
         Returns:
             DatasetDict containing the requested splits
         """
         logger.info("Loading e-SNLI dataset...")
-
-        dataset = load_dataset(
-            "esnli",
-            cache_dir=self.config.cache_dir,
-            trust_remote_code=True 
-        )
-
+        
+        # File CSV ufficiali dal repository e-SNLI
+        data_files = {
+            'train': [
+                'https://raw.githubusercontent.com/OanaMariaCamburu/e-SNLI/master/dataset/esnli_train_1.csv',
+                'https://raw.githubusercontent.com/OanaMariaCamburu/e-SNLI/master/dataset/esnli_train_2.csv'
+            ],
+            'validation': 'https://raw.githubusercontent.com/OanaMariaCamburu/e-SNLI/master/dataset/esnli_dev.csv',
+            'test': 'https://raw.githubusercontent.com/OanaMariaCamburu/e-SNLI/master/dataset/esnli_test.csv'
+        }
+        
         if split:
-            dataset = {split: dataset[split]}
-
-        save_path = Path(self.config.raw_data_dir) / "e-snli"
-        save_path.mkdir(exist_ok=True)
-
+            if split not in data_files:
+                raise ValueError(f"Split '{split}' not found. Available: {list(data_files.keys())}")
+            data_files = {split: data_files[split]}
+        
+        dataset = load_dataset(
+            'csv',
+            data_files=data_files,
+            cache_dir=self.config.cache_dir
+        )
+        
         logger.info(f"e-SNLI loaded successfully. Splits: {list(dataset.keys())}")
         logger.info(f"Sample counts: {[(k, len(v)) for k, v in dataset.items()]}")
+        
         return dataset
 
         
