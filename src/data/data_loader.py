@@ -59,39 +59,49 @@ class TeacherDataLoader:
             DatasetDict containing the requested splits
         """
         logger.info("Loading e-SNLI dataset...")
-        
+
         try:
-            # Try loading with script support (for older datasets versions)
-            try:
-                dataset = load_dataset(
-                    "esnli",
-                    cache_dir=self.config.cache_dir,
-                    trust_remote_code=True
-                )
-            except Exception as e:
-                # If that fails, try without trust_remote_code
-                if "no longer supported" in str(e).lower() or "script" in str(e).lower():
-                    logger.warning(f"Dataset script loading failed: {e}. Trying alternative method...")
-                    dataset = load_dataset(
-                        "esnli",
-                        cache_dir=self.config.cache_dir
-                    )
-                else:
-                    raise
-            
+            # First attempt: standard hub load (no script execution)
+            dataset = load_dataset(
+                "esnli",
+                cache_dir=self.config.cache_dir,
+            )
+
             if split:
                 dataset = {split: dataset[split]}
-                
-            # Save raw data
+
             save_path = Path(self.config.raw_data_dir) / "e-snli"
             save_path.mkdir(exist_ok=True)
-            
+
             logger.info(f"e-SNLI loaded successfully. Splits: {list(dataset.keys())}")
             logger.info(f"Sample counts: {[(k, len(v)) for k, v in dataset.items()]}")
-            
             return dataset
-            
+
         except Exception as e:
+            message = str(e).lower()
+            if "scripts are no longer supported" in message or "trust_remote_code" in message or "script" in message:
+                logger.warning(
+                    f"Dataset script loading failed: {e}. Falling back to parquet snapshot from the hub..."
+                )
+
+                # Fallback: load the auto-converted parquet snapshot hosted on the hub
+                base = "hf://datasets/esnli"
+                data_files = {
+                    "train": f"{base}/train-00000-of-00001.parquet",
+                    "validation": f"{base}/validation-00000-of-00001.parquet",
+                    "test": f"{base}/test-00000-of-00001.parquet",
+                }
+
+                parquet_dataset = load_dataset(
+                    "parquet",
+                    data_files=data_files,
+                    cache_dir=self.config.cache_dir,
+                )
+
+                if split:
+                    return {split: parquet_dataset[split]}
+                return parquet_dataset
+
             logger.error(f"Error loading e-SNLI: {e}")
             raise
     
