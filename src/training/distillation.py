@@ -39,14 +39,6 @@ class DistillationConfig:
 class DistillationLoss(nn.Module):
     """
     Implements various distillation loss functions.
-    
-    For sequence-level distillation (recommended for this project):
-    - Student learns from final predictions and explanations
-    - No need for teacher model at training time (using dataset as teacher)
-    
-    For token-level distillation (optional, requires teacher model):
-    - Student learns from teacher's token-level probability distributions
-    - Requires teacher model to be loaded during training
     """
     
     def __init__(self, config: Optional[DistillationConfig] = None):
@@ -198,183 +190,133 @@ class DistillationLoss(nn.Module):
         return distill_loss
 
 
-class SequenceLevelDistillation:
-    """
-    Sequence-level distillation using dataset as teacher.
-    
-    This is the recommended approach for this project since:
-    - e-SNLI already contains teacher-quality explanations
-    - No need to run teacher model during training (efficient)
-    - Focus on mimicking reasoning patterns, not exact distributions
-    """
-    
-    def __init__(self, config: Optional[DistillationConfig] = None):
-        self.config = config or DistillationConfig()
-        self.loss_fn = DistillationLoss(self.config)
-        
-        logger.info("Initialized SequenceLevelDistillation")
-    
-    def compute_loss(self,
-                    student_logits: torch.Tensor,
-                    labels: torch.Tensor) -> Dict[str, torch.Tensor]:
-        """
-        Compute loss for sequence-level distillation.
-        
-        Args:
-            student_logits: Student model logits
-            labels: Ground truth labels (from teacher/dataset)
-            
-        Returns:
-            Dictionary with loss components
-        """
-        return self.loss_fn(student_logits, labels, teacher_logits=None)
-
-
 class TokenLevelDistillation:
     """
     Token-level distillation requiring teacher model.
     
-    Optional advanced approach:
-    - Requires teacher model to be loaded during training
-    - More expensive but potentially better for small students
-    - Learns from soft probability distributions at each token
+    Implements the distillation pipeline:
+    
+    Dataset → Teacher Model → Soft Logits (probabilities)
+           ↘                ↗
+             Student Model
+             
+    Loss = α·CE(student, labels) + β·KL(student||teacher)
+    
+    Where:
+    - α (ce_weight): Weight for cross-entropy loss with hard labels
+    - β (distill_weight): Weight for KL divergence with teacher soft logits
     """
     
     def __init__(self,
                  teacher_model,
                  config: Optional[DistillationConfig] = None):
+        """
+        Initialize token-level distillation.
+        
+        Args:
+            teacher_model: Teacher model (e.g., FlanT5Teacher)
+            config: Distillation configuration with ce_weight (α) and distill_weight (β)
+        """
         self.teacher_model = teacher_model
         self.config = config or DistillationConfig()
         self.loss_fn = DistillationLoss(self.config)
         
-        # Set teacher to eval mode
+        # Ensure teacher is in eval mode with frozen parameters
         self.teacher_model.eval()
         for param in self.teacher_model.parameters():
             param.requires_grad = False
         
         logger.info("Initialized TokenLevelDistillation with teacher model")
+        logger.info(f"  α (CE weight): {self.config.ce_weight}")
+        logger.info(f"  β (Distill weight): {self.config.distill_weight}")
+        logger.info(f"  Temperature: {self.config.temperature}")
     
     def compute_loss(self,
                     student_logits: torch.Tensor,
                     labels: torch.Tensor,
                     input_ids: torch.Tensor,
-                    attention_mask: torch.Tensor) -> Dict[str, torch.Tensor]:
+                    attention_mask: torch.Tensor,
+                    decoder_input_ids: Optional[torch.Tensor] = None) -> Dict[str, torch.Tensor]:
         """
-        Compute loss with teacher logits.
+        Compute combined distillation loss.
+        
+        Loss = α·CE(student, labels) + β·KL(student||teacher)
         
         Args:
-            student_logits: Student model logits
-            labels: Ground truth labels
-            input_ids: Input token IDs
-            attention_mask: Attention mask
+            student_logits: Student model logits [batch, seq_len, vocab_size]
+            labels: Ground truth labels [batch, seq_len]
+            input_ids: Encoder input token IDs [batch, src_len]
+            attention_mask: Encoder attention mask [batch, src_len]
+            decoder_input_ids: Decoder input IDs [batch, tgt_len]
             
         Returns:
-            Dictionary with loss components
+            Dictionary with loss components:
+            - total_loss: Combined loss
+            - ce_loss: Cross-entropy loss component
+            - distill_loss: KL divergence loss component
         """
-        # Get teacher logits
+        # Get teacher logits (soft targets)
         with torch.no_grad():
+            if decoder_input_ids is None:
+                # Create decoder input ids from labels (shift right)
+                decoder_input_ids = self._shift_right(labels)
+            
             teacher_outputs = self.teacher_model(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
-                labels=labels
+                decoder_input_ids=decoder_input_ids
             )
             teacher_logits = teacher_outputs['logits']
         
-        # Compute combined loss
+        # Handle vocabulary size mismatch between teacher and student
+        if teacher_logits.size(-1) != student_logits.size(-1):
+            teacher_logits = self._align_vocab_sizes(
+                teacher_logits, student_logits.size(-1)
+            )
+        
+        # Compute combined loss: α·CE + β·KL
         return self.loss_fn(student_logits, labels, teacher_logits)
-
-
-class MultiTaskDistillation:
-    """
-    Handles distillation from multiple tasks simultaneously.
     
-    Useful when combining multiple datasets/tasks.
-    """
+    def _shift_right(self, labels: torch.Tensor) -> torch.Tensor:
+        """
+        Shift labels right to create decoder input ids.
+        T5 uses pad_token_id as the start token for decoder.
+        """
+        pad_token_id = 0  # T5 pad token id
+        shifted = labels.new_zeros(labels.shape)
+        shifted[:, 1:] = labels[:, :-1].clone()
+        shifted[:, 0] = pad_token_id
+        # Replace -100 (ignore index) with pad_token_id
+        shifted[shifted == -100] = pad_token_id
+        return shifted
     
-    def __init__(self,
-                 task_weights: Optional[Dict[str, float]] = None,
-                 config: Optional[DistillationConfig] = None):
+    def _align_vocab_sizes(self, 
+                           teacher_logits: torch.Tensor,
+                           target_vocab_size: int) -> torch.Tensor:
         """
-        Args:
-            task_weights: Weights for different tasks (e.g., {'nli': 0.7, 'instruction': 0.3})
-            config: Distillation configuration
-        """
-        self.task_weights = task_weights or {'nli': 1.0, 'instruction': 1.0}
-        self.config = config or DistillationConfig()
-        self.loss_fn = DistillationLoss(self.config)
-        
-        logger.info(f"Initialized MultiTaskDistillation with task weights: {self.task_weights}")
-    
-    def compute_loss(self,
-                    student_logits: torch.Tensor,
-                    labels: torch.Tensor,
-                    task_type: str) -> Dict[str, torch.Tensor]:
-        """
-        Compute weighted loss for specific task.
+        Align teacher logits vocabulary size to match student.
         
         Args:
-            student_logits: Student model logits
-            labels: Ground truth labels
-            task_type: Type of task ('nli' or 'instruction')
+            teacher_logits: Teacher logits [batch, seq_len, teacher_vocab_size]
+            target_vocab_size: Target vocabulary size
             
         Returns:
-            Dictionary with loss components
+            Aligned logits [batch, seq_len, target_vocab_size]
         """
-        losses = self.loss_fn(student_logits, labels, teacher_logits=None)
+        current_vocab_size = teacher_logits.size(-1)
         
-        # Apply task weight
-        task_weight = self.task_weights.get(task_type, 1.0)
-        losses['total_loss'] = losses['total_loss'] * task_weight
-        losses['task_weight'] = torch.tensor(task_weight)
-        
-        return losses
-
-
-class CurriculumDistillation:
-    """
-    Implements curriculum learning for distillation.
-    
-    Progressively increases task difficulty or adjusts loss weights
-    during training.
-    """
-    
-    def __init__(self,
-                 config: Optional[DistillationConfig] = None,
-                 warmup_steps: int = 1000):
-        self.config = config or DistillationConfig()
-        self.loss_fn = DistillationLoss(self.config)
-        self.warmup_steps = warmup_steps
-        self.current_step = 0
-        
-        logger.info(f"Initialized CurriculumDistillation with warmup_steps={warmup_steps}")
-    
-    def compute_loss(self,
-                    student_logits: torch.Tensor,
-                    labels: torch.Tensor) -> Dict[str, torch.Tensor]:
-        """
-        Compute loss with curriculum strategy.
-        
-        Args:
-            student_logits: Student model logits
-            labels: Ground truth labels
-            
-        Returns:
-            Dictionary with loss components
-        """
-        losses = self.loss_fn(student_logits, labels, teacher_logits=None)
-        
-        # Apply curriculum weight (ramp up from 0 to 1)
-        if self.current_step < self.warmup_steps:
-            curriculum_weight = self.current_step / self.warmup_steps
-            losses['total_loss'] = losses['total_loss'] * curriculum_weight
-            losses['curriculum_weight'] = torch.tensor(curriculum_weight)
-        
-        return losses
-    
-    def step(self):
-        """Increment curriculum step."""
-        self.current_step += 1
-
+        if current_vocab_size > target_vocab_size:
+            # Truncate teacher vocab
+            return teacher_logits[:, :, :target_vocab_size]
+        else:
+            # Pad teacher vocab with very negative values
+            padding = torch.full(
+                (*teacher_logits.shape[:-1], target_vocab_size - current_vocab_size),
+                fill_value=-1e9,
+                device=teacher_logits.device,
+                dtype=teacher_logits.dtype
+            )
+            return torch.cat([teacher_logits, padding], dim=-1)
 
 def create_distillation_strategy(
     strategy_type: str = "sequence_level",
@@ -417,7 +359,6 @@ def create_distillation_strategy(
     else:
         raise ValueError(f"Unknown strategy type: {strategy_type}")
 
-
 def compare_distillation_strategies():
     """
     Print comparison of different distillation strategies.
@@ -426,40 +367,9 @@ def compare_distillation_strategies():
     print("DISTILLATION STRATEGIES")
     print("=" * 70)
     
-    print("\n1. Sequence-Level Distillation (RECOMMENDED)")
-    print("   ✓ Uses dataset as implicit teacher")
-    print("   ✓ No teacher model needed during training")
-    print("   ✓ Efficient and scalable")
-    print("   ✓ Focus on final predictions and explanations")
-    print("   ✗ Doesn't capture intermediate reasoning")
-    
-    print("\n2. Token-Level Distillation")
-    print("   ✓ Learns from soft probability distributions")
-    print("   ✓ Can capture richer knowledge")
-    print("   ✗ Requires teacher model during training")
-    print("   ✗ Much slower and memory intensive")
-    print("   ✗ Overkill for explanation generation")
-    
-    print("\n3. Multi-Task Distillation")
-    print("   ✓ Handles multiple datasets/tasks")
-    print("   ✓ Task-specific loss weighting")
-    print("   ✓ Good for combining multiple NLI datasets")
-    print("   ✗ Requires careful weight tuning")
-    
-    print("\n4. Curriculum Distillation")
-    print("   ✓ Gradually increases difficulty")
-    print("   ✓ Can improve convergence")
-    print("   ✓ Useful for complex reasoning")
-    print("   ✗ Adds hyperparameter complexity")
-    
-    print("=" * 70)
-
-
-# Recommended configuration for this project
-RECOMMENDED_CONFIG = DistillationConfig(
-    ce_weight=1.0,
-    distill_weight=0.0,  # No explicit distillation, using dataset as teacher
-    temperature=1.0,
-    distillation_type="sequence_level",
-    label_smoothing=0.1  # Slight smoothing helps generalization
-)
+    print("\n1. Token-Level Distillation with Teacher Model (RECOMMENDED)")
+    print("   ✓ Uses soft probability distributions from teacher (dark knowledge)")
+    print("   ✓ Loss = α·CE(student, labels) + β·KL(student||teacher)")
+    print("   ✓ Captures richer knowledge than hard labels alone")
+    print("   ✓ Recommended teacher: google/flan-t5-xl")
+    print("   ✗ Requires teacher model during training (more memory)")

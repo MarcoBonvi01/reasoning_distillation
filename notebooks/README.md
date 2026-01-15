@@ -10,9 +10,9 @@ This directory contains Jupyter notebooks for testing, training, evaluation, and
 
 1. **01_data_exploration.ipynb**
 
-- Explore e-SNLI dataset
-- Analyze data distribution and quality
-- Visualize explanation patterns
+   - Explore e-SNLI dataset
+   - Analyze data distribution and quality
+   - Visualize explanation patterns
 
 2. **02_preprocessing_and_datasets.ipynb**
 
@@ -20,40 +20,53 @@ This directory contains Jupyter notebooks for testing, training, evaluation, and
    - Create and validate datasets
    - Verify tokenization and formatting
 
-3. **03_model_testing.ipynb**
+3. **03_student_model.ipynb**
 
    - Test FLAN-T5 student models
    - Verify forward pass and generation
-   - Test DatasetTeacher
    - Compare model sizes (small, base)
 
-4. **04_training_loop_testing.ipynb**
+4. **04_teacher_model.ipynb**
+
+   - Test FLAN-T5-XL teacher model
+   - Verify soft logits generation
+   - Test teacher inference on NLI examples
+   - Knowledge distillation integration (teacher-student)
+   - Loss formula: α·CE(student, labels) + β·KL(student||teacher)
+
+5. **05_training_loop.ipynb**
    - Test distillation loss computation
-   - Validate training loop
+   - Validate training loop with knowledge distillation
    - Test checkpointing and resume
    - Analyze optimizer state
 
 ### Evaluation & Analysis
 
-5. **05_evaluation_testing.ipynb** ⭐ **ENHANCED**
+6. **06_evaluation.ipynb**
 
    - Test individual metrics (Accuracy, ROUGE, BERTScore, Faithfulness)
    - Full evaluation pipeline
    - Error analysis with confusion matrix
    - Per-label evaluation
    - **Batch evaluation** (compare multiple models)
-   - **Model Size Degradation Analysis** (NEW)
+   - **Model Size Degradation Analysis**
      - Compare small, base, large FLAN-T5
      - Performance vs efficiency trade-offs
      - Compression ratio analysis
      - Speedup vs accuracy retention
 
-6. **06_ablation_studies.ipynb** ⭐ **NEW**
+7. **07_ablation_studies.ipynb**
+
    - **Ablation Study 1**: Label Smoothing (0.0, 0.1, 0.2)
    - **Ablation Study 2**: Training Data Size (10%, 50%, 100%)
    - **Ablation Study 3**: Generation Temperature (0.5, 0.7, 1.0, 1.2)
    - Systematic hyperparameter analysis
    - Optimal configuration recommendations
+
+8. **08_distillation_analysis.ipynb**
+   - Analyze distillation effectiveness
+   - Compare teacher vs student outputs
+   - Visualize knowledge transfer
 
 ## Execution Order
 

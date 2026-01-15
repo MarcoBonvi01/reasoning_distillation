@@ -298,70 +298,7 @@ class StudentModel(nn.Module):
             'num_heads': self.model.config.num_heads,
             'vocab_size': self.model.config.vocab_size
         }
-
-
-class StudentEnsemble:
-    """
-    Ensemble of multiple student models.
-    Useful for multi-teacher distillation or model averaging.
-    """
     
-    def __init__(self, models: List[StudentModel]):
-        """
-        Args:
-            models: List of StudentModel instances
-        """
-        self.models = models
-        self.num_models = len(models)
-        
-        logger.info(f"Initialized ensemble with {self.num_models} models")
-    
-    def generate_ensemble(self,
-                         input_ids: torch.Tensor,
-                         attention_mask: torch.Tensor,
-                         voting_strategy: str = "majority",
-                         **generation_kwargs) -> List[str]:
-        """
-        Generate using ensemble voting.
-        
-        Args:
-            input_ids: Input token IDs
-            attention_mask: Attention mask
-            voting_strategy: How to combine predictions ("majority" or "average_logits")
-            **generation_kwargs: Generation parameters
-            
-        Returns:
-            List of ensemble predictions
-        """
-        if voting_strategy == "majority":
-            # Generate from each model
-            all_predictions = []
-            
-            for model in self.models:
-                generated_ids = model.generate(
-                    input_ids, 
-                    attention_mask, 
-                    **generation_kwargs
-                )
-                predictions = model.decode_batch(generated_ids)
-                all_predictions.append(predictions)
-            
-            # Majority voting
-            batch_size = len(all_predictions[0])
-            ensemble_predictions = []
-            
-            for i in range(batch_size):
-                votes = [pred[i] for pred in all_predictions]
-                # Simple majority (most common prediction)
-                ensemble_pred = max(set(votes), key=votes.count)
-                ensemble_predictions.append(ensemble_pred)
-            
-            return ensemble_predictions
-        
-        else:
-            raise NotImplementedError(f"Voting strategy '{voting_strategy}' not implemented")
-
-
 def create_student_model(
     model_size: str = "base",
     device: Optional[str] = None,
@@ -381,9 +318,6 @@ def create_student_model(
     model_name_map = {
         "small": "google/flan-t5-small",
         "base": "google/flan-t5-base",
-        "large": "google/flan-t5-large",
-        "xl": "google/flan-t5-xl",
-        "xxl": "google/flan-t5-xxl"
     }
     
     if model_size not in model_name_map:
@@ -407,9 +341,6 @@ def compare_model_sizes() -> None:
     sizes_info = {
         "small": {"params": "80M", "layers": "6/6", "hidden": 512},
         "base": {"params": "250M", "layers": "12/12", "hidden": 768},
-        "large": {"params": "780M", "layers": "24/24", "hidden": 1024},
-        "xl": {"params": "3B", "layers": "24/24", "hidden": 2048},
-        "xxl": {"params": "11B", "layers": "24/24", "hidden": 4096}
     }
     
     print("=" * 70)
