@@ -402,10 +402,21 @@ class Trainer:
         
         # Compute distillation loss if strategy provided
         if self.distillation_strategy:
-            loss_dict = self.distillation_strategy.compute_loss(
-                outputs['logits'],
-                batch['labels']
-            )
+            # Check if strategy requires input_ids and attention_mask (e.g., TokenLevelDistillation)
+            if hasattr(self.distillation_strategy, 'teacher_model'):
+                # Token-level distillation with teacher model
+                loss_dict = self.distillation_strategy.compute_loss(
+                    student_logits=outputs['logits'],
+                    labels=batch['labels'],
+                    input_ids=batch['input_ids'],
+                    attention_mask=batch['attention_mask']
+                )
+            else:
+                # Sequence-level distillation (no teacher model)
+                loss_dict = self.distillation_strategy.compute_loss(
+                    outputs['logits'],
+                    batch['labels']
+                )
         else:
             # Standard training without distillation
             loss_dict = {
