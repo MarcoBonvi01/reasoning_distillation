@@ -307,7 +307,7 @@ class Trainer:
             loss = loss_dict['total_loss']
             
             # Backward pass
-            if self.config.fp16:
+            if self.config.fp16 and self.scaler is not None:
                 self.scaler.scale(loss).backward()
             else:
                 loss.backward()
@@ -315,7 +315,7 @@ class Trainer:
             # Update weights every gradient_accumulation_steps
             if (step + 1) % self.config.gradient_accumulation_steps == 0:
                 # Clip gradients
-                if self.config.fp16:
+                if self.config.fp16 and self.scaler is not None:
                     self.scaler.unscale_(self.optimizer)
                 torch.nn.utils.clip_grad_norm_(
                     self.model.model.parameters(),
@@ -323,7 +323,7 @@ class Trainer:
                 )
                 
                 # Optimizer step
-                if self.config.fp16:
+                if self.config.fp16 and self.scaler is not None:
                     self.scaler.step(self.optimizer)
                     self.scaler.update()
                 else:
