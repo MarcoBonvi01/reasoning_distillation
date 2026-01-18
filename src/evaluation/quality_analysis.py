@@ -165,14 +165,14 @@ def print_quality_analysis(quality_stats: Dict) -> None:
     print("EXPLANATION QUALITY ANALYSIS")
     print("=" * 70)
     
-    print(f"\n📊 Tautology Detection:")
+    print(f"\nTautology Detection:")
     print(f"  Tautologies: {quality_stats['tautology_count']} ({quality_stats['tautology_percentage']:.1f}%)")
     print(f"  Avg tautology similarity: {quality_stats['avg_tautology_similarity']:.4f}")
     
-    print(f"\n🎯 Similarity to Ground Truth:")
+    print(f"\nSimilarity to Ground Truth:")
     print(f"  Avg GT similarity: {quality_stats['avg_gt_similarity']:.4f}")
     
-    print(f"\n📏 Length Analysis:")
+    print(f"\nLength Analysis:")
     print(f"  Avg prediction length: {quality_stats['avg_prediction_length']:.1f} words")
     print(f"  Avg GT length: {quality_stats['avg_gt_length']:.1f} words")
     print(f"  Avg length ratio (pred/GT): {quality_stats['avg_length_ratio']:.2f}")
