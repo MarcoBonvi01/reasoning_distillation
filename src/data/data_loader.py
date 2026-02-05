@@ -108,7 +108,7 @@ class TeacherDataLoader:
                 'test': test
             })
             
-            logger.info(f"✓ Loaded e-SNLI: train={len(train)}, val={len(validation)}, test={len(test)}")
+            logger.info(f"Loaded e-SNLI: train={len(train)}, val={len(validation)}, test={len(test)}")
             
         except Exception as e:
             logger.error(f"Error loading e-SNLI: {e}")
