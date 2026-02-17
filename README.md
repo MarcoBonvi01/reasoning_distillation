@@ -97,6 +97,8 @@ See the end of this document for key papers and resources on knowledge distillat
 
 Academic project for Master's programme in NLP. See LICENSE for details.
 
+Code generated with Claude Sonet 4.
+
 ---
 
 **End of README**
