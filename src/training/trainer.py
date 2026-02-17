@@ -279,11 +279,31 @@ class Trainer:
         
         # Save final model
         self._save_checkpoint(is_final=True)
+
+        # Save training summary
+        self._save_training_summary()
         
         return {
             'train_history': self.train_history,
             'eval_history': self.eval_history
         }
+
+    def _save_training_summary(self):
+        """Save a compact training summary to the output directory."""
+        summary = {
+            'global_step': self.global_step,
+            'epoch': self.epoch,
+            'best_metric': self.best_metric,
+            'train_history': self.train_history,
+            'eval_history': self.eval_history,
+            'output_dir': str(self.output_dir),
+            'config': asdict(self.config)
+        }
+
+        summary_path = self.output_dir / "training_summary.json"
+        with open(summary_path, 'w') as f:
+            json.dump(summary, f, indent=2)
+        logger.info(f"Training summary saved to {summary_path}")
     
     def _train_epoch(self) -> Dict[str, float]:
         """
